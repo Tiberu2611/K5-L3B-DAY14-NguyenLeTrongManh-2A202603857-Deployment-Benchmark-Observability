@@ -61,7 +61,7 @@ def log(event: str, level: int = logging.INFO, **fields) -> None:
 # ─────────────────────────────────────────────────────────
 # Graceful shutdown
 # ─────────────────────────────────────────────────────────
-_state = {"shutting_down": False}
+_state = {"shutting_down": False, "ready_error": None}
 
 
 def _install_sigterm_hook() -> None:
@@ -165,9 +165,15 @@ def ready():
     if _state["shutting_down"]:
         return JSONResponse(status_code=503, content={"status": "shutting_down"})
     if not redis_healthy():
-        # Log chi tiết (host đã che mật khẩu) để biết vì sao 503; response không lộ thông tin nội bộ
-        log("ready_failed", logging.WARNING, redis=redact_url(settings.redis_url), error=last_error())
+        # Log chi tiết (host đã che mật khẩu) để biết vì sao 503; response không lộ thông tin nội bộ.
+        # Platform probe /ready liên tục → chỉ log khi lỗi đổi, tránh spam log.
+        if _state["ready_error"] != last_error():
+            _state["ready_error"] = last_error()
+            log("ready_failed", logging.WARNING, redis=redact_url(settings.redis_url), error=last_error())
         return JSONResponse(status_code=503, content={"status": "not_ready", "redis": "down"})
+    if _state["ready_error"] is not None:
+        _state["ready_error"] = None
+        log("ready_recovered", redis=redact_url(settings.redis_url))
     return {"status": "ready", "redis": "ok"}
 
 

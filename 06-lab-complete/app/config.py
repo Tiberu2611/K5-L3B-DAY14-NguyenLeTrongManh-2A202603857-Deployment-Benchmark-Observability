@@ -46,7 +46,8 @@ def redact_url(url: str) -> str:
     """Bỏ mật khẩu khỏi URL trước khi ghi log."""
     parts = urlsplit(url)
     if parts.password:
-        netloc = f"{parts.username or ''}:***@{parts.hostname}" + (f":{parts.port}" if parts.port else "")
+        host = f"[{parts.hostname}]" if ":" in (parts.hostname or "") else parts.hostname  # IPv6 literal
+        netloc = f"{parts.username or ''}:***@{host}" + (f":{parts.port}" if parts.port else "")
         parts = parts._replace(netloc=netloc)
     return urlunsplit(parts)
 
