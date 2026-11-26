@@ -81,16 +81,16 @@ Stack chạy bằng `docker compose -p k5-day14-observability ...` (Prometheus, 
 
 ### 4.1 Screenshot
 
-- [x] Dashboard Grafana khi đang có tải: `screenshots/grafana-dashboard.png` (3 instance, Locust 100 user: 61.1 req/s, error 1.13 %, p95 293 ms, in-flight 8, LLM cost 1h $0.5228)
+- [x] Dashboard Grafana khi đang có tải: `screenshots/grafana-dashboard.png`, chụp đúng điều kiện Exercise 7.4: 2 instance, Locust **30 user / ramp up 5**. Số đọc được: 18.6 req/s, error 1.07 %, p95 294.3 ms, in-flight 8, LLM cost 1h $0.1231, không alert nào firing
 - [x] Một trace chậm trong Jaeger: `screenshots/jaeger-slow-trace.png`
 - [x] Một trace lỗi trong Jaeger: `screenshots/jaeger-error-trace.png` (POST /ask 503, span `chat mock-llm-small` có `error.type=upstream_unavailable`, mở rộng event `exception` thấy `exception.message`, `exception.stacktrace`, `exception.type = utils.mock_llm.LLMError`)
 - [x] Trang Alerts của Prometheus: `screenshots/prometheus-alert-firing.png` (`AgentHighErrorRate` và `AgentInstanceDown` cùng **FIRING**)
 
-**Exercise 7.4: trả lời câu hỏi** (số đọc từ ảnh Grafana, đang chạy 100 user, 3 instance)
+**Exercise 7.4: trả lời câu hỏi** (số đọc từ ảnh Grafana và query Prometheus cùng lúc chụp: 30 user, 2 instance)
 
-1. **p95 = 293 ms, còn avg ≈ 200–230 ms** (Locust ghi avg của `/ask` = 231 ms trong `scale_3_stats.csv`), p99 ≈ 1.9 s. p95 và avg gần nhau nên phần lớn request đồng đều. Còn p99 gấp ~8 lần avg là do khoảng 3 % request "slow" (tail latency): nhìn avg sẽ không thấy được nhóm này.
-2. **Có chia đều.** Panel "Requests/s theo instance" lúc chạy 3 agent cho 3 đường gần trùng nhau (~20 req/s mỗi instance), vì Nginx `upstream` mặc định round-robin. Lúc chạy 1 instance thì toàn bộ ~60 req/s dồn vào một đường.
-3. **Input tokens/s (~7.5 K) lớn hơn output tokens/s (~4.8 K)** vì agent v2 nhét câu hỏi + system prompt + tài liệu retrieval vào prompt, còn câu trả lời ngắn. Log `llm_call` cho thấy điển hình `input_tokens=95, output_tokens=55`. Nhưng output token đắt gấp 4 lần input (0.0006 so với 0.00015 USD/1K), nên cần theo dõi cả hai.
+1. **p95 = 294 ms, avg = 242 ms, p99 = 1862 ms.** p95 và avg gần nhau nên ~95 % request đồng đều quanh ~200–300 ms. Còn p99 gấp ~7.7 lần avg là do ~3 % request bị chậm thêm 1500 ms (`MOCK_SLOW_RATE=0.03`, tail latency): nhìn avg sẽ không thấy nhóm này. Error rate 1.07 % (cam) cũng do lỗi giả lập `MOCK_ERROR_RATE=0.01`, vẫn dưới SLO 2 %.
+2. **Có chia đều.** Panel "Requests/s theo instance" có 2 đường gần trùng nhau: 172.18.0.4 = 9.29 req/s, 172.18.0.6 = 9.31 req/s, vì Nginx `upstream` mặc định round-robin.
+3. **Input tokens/s (~1432) lớn hơn output tokens/s (~752)** vì agent v2 nhét câu hỏi + system prompt + tài liệu retrieval vào prompt, còn câu trả lời ngắn. Log `llm_call` cho thấy điển hình `input_tokens=95, output_tokens=55`. Nhưng output token đắt gấp 4 lần input (0.0006 so với 0.00015 USD/1K), nên cần theo dõi cả hai.
 4. `curl http://localhost:8080/metrics` trả về **404 Not Found** của Nginx. Lý do là `nginx.conf` có `location = /metrics { return 404; }`: metrics để Prometheus scrape trực tiếp từng agent trong mạng nội bộ `obs_net`, không mở ra ngoài, vì nó lộ route, lưu lượng và thông tin hệ thống. Thêm nữa, qua load balancer mỗi lần sẽ trúng một instance khác nhau nên số liệu cũng vô nghĩa.
 
 Unit test alert rules: `promtool test rules /p/alert_rules_test.yml` → `SUCCESS`.
