@@ -18,10 +18,10 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from app.auth import verify_api_key
-from app.config import settings
+from app.config import redact_url, settings
 from app.cost_guard import check_budget, estimate_tokens, record_cost
 from app.rate_limiter import check_rate_limit
-from app.redis_client import r, redis_healthy
+from app.redis_client import last_error, r, redis_healthy
 from utils.mock_llm import ask as llm_ask
 
 
@@ -61,7 +61,7 @@ def log(event: str, level: int = logging.INFO, **fields) -> None:
 # ─────────────────────────────────────────────────────────
 # Graceful shutdown
 # ─────────────────────────────────────────────────────────
-_state = {"shutting_down": False}
+_state = {"shutting_down": False, "ready_error": None}
 
 
 def _install_sigterm_hook() -> None:
@@ -89,6 +89,15 @@ async def lifespan(app: FastAPI):
     _install_sigterm_hook()
     if not settings.agent_api_key:
         log("agent_api_key_missing", logging.WARNING, note="all /ask requests will be rejected")
+    redis_target = redact_url(settings.redis_url)
+    if "localhost" in redis_target or "127.0.0.1" in redis_target:
+        if settings.environment == "production":
+            log("redis_url_points_to_localhost", logging.WARNING, redis=redis_target,
+                hint="set REDIS_URL on the agent service to your cloud Redis connection string")
+    if redis_healthy():
+        log("redis_connected", redis=redis_target)
+    else:
+        log("redis_unreachable", logging.ERROR, redis=redis_target, error=last_error())
     log("startup", environment=settings.environment,
         rate_limit_per_minute=settings.rate_limit_per_minute,
         daily_budget_usd=settings.daily_budget_usd,
@@ -124,7 +133,8 @@ async def access_log(request: Request, call_next):
 
 @app.exception_handler(redis.RedisError)
 async def redis_error_handler(request: Request, exc: redis.RedisError):
-    log("redis_unavailable", logging.ERROR, path=request.url.path, error=type(exc).__name__)
+    log("redis_unavailable", logging.ERROR, path=request.url.path,
+        redis=redact_url(settings.redis_url), error=f"{type(exc).__name__}: {exc}")
     return JSONResponse(status_code=503, content={"detail": "Service temporarily unavailable"},
                         headers={"Retry-After": "5"})
 
@@ -155,7 +165,15 @@ def ready():
     if _state["shutting_down"]:
         return JSONResponse(status_code=503, content={"status": "shutting_down"})
     if not redis_healthy():
+        # Log chi tiết (host đã che mật khẩu) để biết vì sao 503; response không lộ thông tin nội bộ.
+        # Platform probe /ready liên tục → chỉ log khi lỗi đổi, tránh spam log.
+        if _state["ready_error"] != last_error():
+            _state["ready_error"] = last_error()
+            log("ready_failed", logging.WARNING, redis=redact_url(settings.redis_url), error=last_error())
         return JSONResponse(status_code=503, content={"status": "not_ready", "redis": "down"})
+    if _state["ready_error"] is not None:
+        _state["ready_error"] = None
+        log("ready_recovered", redis=redact_url(settings.redis_url))
     return {"status": "ready", "redis": "ok"}
 
 

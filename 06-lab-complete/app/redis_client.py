@@ -18,8 +18,20 @@ r = redis.from_url(
 )
 
 
+_last_error: str | None = None
+
+
+def last_error() -> str | None:
+    """Lỗi kết nối Redis gần nhất (không chứa mật khẩu) — để log/ready giải thích vì sao 503."""
+    return _last_error
+
+
 def redis_healthy() -> bool:
+    global _last_error
     try:
-        return bool(r.ping())
-    except redis.RedisError:
+        ok = bool(r.ping())
+        _last_error = None
+        return ok
+    except redis.RedisError as exc:
+        _last_error = f"{type(exc).__name__}: {exc}"
         return False
