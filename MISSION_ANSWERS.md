@@ -406,7 +406,7 @@ Chạy bản đầy đủ (có Docker) trong `06-lab-complete/`:
 ================================================================
 ```
 
-Chi tiết đo được: image **247 MB**; `docker stop` tắt êm (exit code 0, **0.8 s**); SIGTERM lúc đang có request → request vẫn 200; hết budget → 402 ở request thứ 1; mọi dòng log là JSON hợp lệ.
+Chi tiết đo được: image **248 MB**; `docker stop` tắt êm (exit code 0, **0.8 s**); SIGTERM lúc đang có request → request vẫn 200; hết budget → 402 ở request thứ 1; mọi dòng log là JSON hợp lệ.
 
 ---
 

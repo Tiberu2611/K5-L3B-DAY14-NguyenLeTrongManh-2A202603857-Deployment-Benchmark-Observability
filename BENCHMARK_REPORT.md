@@ -83,7 +83,7 @@ Stack chạy bằng `docker compose -p k5-day14-observability ...` (Prometheus, 
 
 - [x] Dashboard Grafana khi đang có tải: `screenshots/grafana-dashboard.png` (3 instance, Locust 100 user: 61.1 req/s, error 1.13 %, p95 293 ms, in-flight 8, LLM cost 1h $0.5228)
 - [x] Một trace chậm trong Jaeger: `screenshots/jaeger-slow-trace.png`
-- [x] Một trace lỗi trong Jaeger: `screenshots/jaeger-error-trace.png` (POST /ask 503, span `chat mock-llm-small` có `error.type=upstream_unavailable`, event `exception`)
+- [x] Một trace lỗi trong Jaeger: `screenshots/jaeger-error-trace.png` (POST /ask 503, span `chat mock-llm-small` có `error.type=upstream_unavailable`, mở rộng event `exception` thấy `exception.message`, `exception.stacktrace`, `exception.type = utils.mock_llm.LLMError`)
 - [x] Trang Alerts của Prometheus: `screenshots/prometheus-alert-firing.png` (`AgentHighErrorRate` và `AgentInstanceDown` cùng **FIRING**)
 
 **Exercise 7.4: trả lời câu hỏi** (số đọc từ ảnh Grafana, đang chạy 100 user, 3 instance)
@@ -134,10 +134,11 @@ Trace chậm nhất trong lúc chạy 100 user / 3 instance:
 {"ts": "2026-11-26T09:19:45.735118+00:00", "level": "INFO", "service": "observable-agent", "instance": "86a51d79cfd7", "event": "http_request", "trace_id": "9fdac38321af69fa20aba44a17f0d4a6", "span_id": "ef0aa56da17a80a3", "request_id": "0cfb3796d7b0", "method": "POST", "route": "/ask", "status": 200, "ms": 1718.1}
 ```
 
-Trace lỗi (ảnh `jaeger-error-trace.png`): `trace_id` `8ee030cccb796937993d3dc7a5f7d86b`, 855 ms, span `chat mock-llm-small` 836 ms, status error `LLMError: Upstream LLM error: 503 Service Unavailable (mock)`:
+Trace lỗi (ảnh `jaeger-error-trace.png`, chạy với `MOCK_ERROR_RATE=0.3` để dễ bắt lỗi): `trace_id` `04d46e119b0be831ab26c30476eb7878`, tổng 104 ms, span `chat mock-llm-small` 87.7 ms mang status error. Event `exception` (tại 103.13 ms) có `exception.type = utils.mock_llm.LLMError`, `exception.message = Upstream LLM error: 503 Service Unavailable (mock)` và stacktrace trỏ tới `app/main.py` dòng 153 (`run_agent` → `mock_llm.generate`). Hai dòng log cùng `trace_id`:
 
 ```json
-{"ts": "2026-11-26T09:19:56.087485+00:00", "level": "INFO", "service": "observable-agent", "instance": "3955c2d12b8f", "event": "llm_error", "trace_id": "8ee030cccb796937993d3dc7a5f7d86b", "span_id": "b6f0f2fcfddc8148", "request_id": "f3d585a13b12", "error": "Upstream LLM error: 503 Service Unavailable (mock)"}
+{"ts": "2026-11-26T10:02:16.281849+00:00", "level": "INFO", "service": "observable-agent", "instance": "0606752f2999", "event": "llm_error", "trace_id": "04d46e119b0be831ab26c30476eb7878", "span_id": "695179617cef46b1", "request_id": "99292ac570b2", "error": "Upstream LLM error: 503 Service Unavailable (mock)"}
+{"ts": "2026-11-26T10:02:16.282149+00:00", "level": "INFO", "service": "observable-agent", "instance": "0606752f2999", "event": "http_request", "trace_id": "04d46e119b0be831ab26c30476eb7878", "span_id": "695179617cef46b1", "request_id": "99292ac570b2", "method": "POST", "route": "/ask", "status": 503, "ms": 103.6}
 ```
 
 ---
