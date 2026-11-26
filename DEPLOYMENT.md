@@ -1,63 +1,68 @@
 # Deployment Information
 
-> ⏳ **Chưa deploy.** Các chỗ có `<...>` sẽ được thay bằng URL thật và kết quả chạy thật sau khi deploy agent Part 6 (`06-lab-complete/`).
-
 ## Public URL
 
-`<https://...>`
+https://day14-agent-vaga.onrender.com
 
 ## Platform
 
-`<Railway | Render>`. Deploy thư mục `06-lab-complete/`, dùng `railway.toml` hoặc `render.yaml`. Redis: `<Railway Redis | Render Key Value day14-redis>`.
+**Render** (Blueprint: `06-lab-complete/render.yaml`, region Singapore, plan Free).
+- Web service: `day14-agent` (Docker, `rootDir: 06-lab-complete`, health check `/health`)
+- Redis: `day14-redis` (Render Key Value — Valkey 8, Singapore, internal connection via `fromService`)
 
 ## Test Commands
 
-Đặt `BASE` là URL public và `AGENT_API_KEY` là key đã đặt trên nền tảng. Mỗi lệnh chỉ in mã HTTP nên chụp ảnh không lộ key.
+Đặt `BASE="https://day14-agent-vaga.onrender.com"` và `AGENT_API_KEY` là key đã đặt trên Render (tab **Environment**). Mỗi lệnh chỉ in mã HTTP nên không lộ key:
 
 ```bash
+BASE="https://day14-agent-vaga.onrender.com"
 curl -sS -o /dev/null -w '%{http_code}\n' "$BASE/health"     # 200
 curl -sS -o /dev/null -w '%{http_code}\n' "$BASE/ready"      # 200
 curl -sS -o /dev/null -w '%{http_code}\n' -X POST "$BASE/ask" -H 'Content-Type: application/json' -d '{"question":"Hello"}'   # 401
 curl -sS -o /dev/null -w '%{http_code}\n' -X POST "$BASE/ask" -H 'Content-Type: application/json' -H "X-API-Key: $AGENT_API_KEY" -d '{"question":"Hello"}'   # 200
 ```
 
-Kết quả thực tế:
+Kết quả thực tế (đo ngày 2026-11-26):
 
 ```text
-<dán output 4 lệnh ở đây>
+200
+200
+401
+200
 ```
 
-### Health check
+### Health & Readiness Check
 
 ```bash
-curl "$BASE/health"
+curl https://day14-agent-vaga.onrender.com/health
 # {"status":"ok"}
+
+curl https://day14-agent-vaga.onrender.com/ready
+# {"status":"ready","redis":"ok"}
 ```
 
-### API test (with authentication)
+### API Test (with authentication)
 
 ```bash
-curl -X POST "$BASE/ask" \
+curl -X POST https://day14-agent-vaga.onrender.com/ask \
   -H "X-API-Key: $AGENT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"user_id": "test", "question": "Hello"}'
+# {"question":"Hello","answer":"Agent đang hoạt động tốt! (mock response) Hỏi thêm câu hỏi đi nhé."}
 ```
 
 ## Environment Variables Set
 
-Đặt trên nền tảng, không ghi trong code:
+Đặt trên nền tảng Render (không ghi giá trị secret trong code):
 
 | Biến | Giá trị / nguồn |
 |---|---|
-| `PORT` | Nền tảng tự cấp |
+| `PORT` | Render tự cấp |
 | `ENVIRONMENT` | `production` |
-| `AGENT_API_KEY` | Secret (Render: `generateValue: true`; Railway: `railway variables --set`) |
-| `REDIS_URL` | Railway: `${{Redis.REDIS_URL}}`; Render: `fromService` → `day14-redis` |
+| `AGENT_API_KEY` | Secret do Render tự sinh (`generateValue: true`) |
+| `REDIS_URL` | `fromService` → `day14-redis` (`connectionString`) |
 | `RATE_LIMIT_PER_MINUTE` | `10` |
 | `DAILY_BUDGET_USD` / `MONTHLY_BUDGET_USD` | `1.0` / `10.0` |
-| `LOG_LEVEL` | `INFO` |
-
-Nếu `/ready` hoặc `/ask` trả 503 thì agent chưa kết nối được Redis. Xem dòng log `redis_unreachable` hoặc `ready_failed` (host đã che mật khẩu) để biết nguyên nhân.
 
 ## Screenshots
 

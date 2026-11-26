@@ -160,11 +160,18 @@ $ curl http://localhost/ask -X POST -H "Content-Type: application/json" -d '{"qu
 
 ### Exercise 3.1 / 3.2: Deploy agent Part 6
 
-> ⏳ **Chưa deploy.** Cần tài khoản Railway/Render của sinh viên. URL, ảnh và output của 4 lệnh tự kiểm sẽ điền vào đây và vào `DEPLOYMENT.md` sau khi deploy.
+- **Platform:** Render (Blueprint `06-lab-complete/render.yaml`: Docker service `day14-agent` + Render Key Value `day14-redis` Valkey 8, region Singapore)
+- **URL:** https://day14-agent-vaga.onrender.com (chi tiết xem [`DEPLOYMENT.md`](DEPLOYMENT.md))
+- **Screenshots:** [`screenshots/dashboard.png`](screenshots/dashboard.png), [`screenshots/running.png`](screenshots/running.png), [`screenshots/test.png`](screenshots/test.png)
 
-- Platform: _(Railway hoặc Render)_
-- URL: _(điền sau khi deploy)_
-- Screenshot: `screenshots/dashboard.png`, `screenshots/running.png`, `screenshots/test.png`
+Kết quả 4 lệnh tự kiểm CP6 trên URL public:
+
+```text
+$ curl -sS -o /dev/null -w '%{http_code}\n' "$BASE/health"                                           → 200  ({"status":"ok"})
+$ curl -sS -o /dev/null -w '%{http_code}\n' "$BASE/ready"                                            → 200  ({"status":"ready","redis":"ok"})
+$ curl -sS -o /dev/null -w '%{http_code}\n' -X POST "$BASE/ask" ... -d '{"question":"Hello"}'        → 401  ({"detail":"Invalid or missing API key"})
+$ curl -sS -o /dev/null -w '%{http_code}\n' -X POST "$BASE/ask" -H "X-API-Key: $AGENT_API_KEY" ...   → 200  ({"question":"Hello","answer":"Agent đang hoạt động tốt! (mock response) Hỏi thêm câu hỏi đi nhé."})
+```
 
 ### So sánh `railway.toml` và `render.yaml` (trong `06-lab-complete/`)
 
