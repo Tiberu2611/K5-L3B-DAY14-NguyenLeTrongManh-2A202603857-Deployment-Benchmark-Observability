@@ -74,7 +74,7 @@ def _install_sigterm_hook() -> None:
 
     def handler(signum, frame):
         _state["shutting_down"] = True
-        log("sigterm_received", draining=True)
+        log("graceful_shutdown_started", signal="SIGTERM", draining=True)
         if callable(previous):
             previous(signum, frame)
 
@@ -100,7 +100,7 @@ async def lifespan(app: FastAPI):
         r.close()
     except Exception:
         pass
-    log("shutdown_complete")
+    log("graceful_shutdown_complete")
 
 
 app = FastAPI(title="Production AI Agent", lifespan=lifespan)
@@ -157,6 +157,13 @@ def ready():
     if not redis_healthy():
         return JSONResponse(status_code=503, content={"status": "not_ready", "redis": "down"})
     return {"status": "ready", "redis": "ok"}
+
+
+@app.get("/ask", include_in_schema=False)
+def ask_wrong_method(api_key: str = Depends(verify_api_key)):
+    """Xác thực trước khi báo sai method: GET không có key → 401, không lộ endpoint."""
+    return JSONResponse(status_code=405, content={"detail": "Use POST /ask"},
+                        headers={"Allow": "POST"})
 
 
 @app.post("/ask")
